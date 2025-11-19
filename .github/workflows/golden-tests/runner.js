@@ -1,155 +1,60 @@
-/**
- * Multi-Validator Runner
- * -----------------------
- * Golden Baseline と現在の出力（Zod / Pydantic / Go / Firestore）を比較し、
- * diff を生成する CI / ローカル共通のランナー。
- *
- * CI 上では failing diff が snapshot-diff-generator へ渡され、
- * Golden Test PR Bot が PR コメントを更新する。
- */
+// golden-tests/runner.js
+//
+// Multi Validator Runner
+// 各 validator ディレクトリ内の runner.js を呼んで比較を行う。
+// generator.js が用意した入力でテストを実行し、
+// 結果を golden-tests/output/ 以下に出力する。
+//
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
 
-/** ディレクトリ設定 */
-const CONFIG = {
-  goldenDir: path.join(__dirname, "golden"),
-  snapshotDir: path.join(__dirname, "snapshots"),
-  validatorsDir: path.join(__dirname, "../validators"),
-  outDir: path.join(__dirname, "output"),
-};
+async function loadValidatorRunners() {
+  const dir = path.join(process.cwd(), "validators");
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
 
-/**
- * Utility
- */
-function ensure(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  return entries
+    .filter((e) => e.isDirectory())
+    .map((d) => ({
+      name: d.name,
+      run: require(path.join(dir, d.name, "runner.js")),
+    }));
+}
+
+async function run() {
+  const samplesPath = path.join(
+    process.cwd(),
+    "golden-tests",
+    "output",
+    "samples.json"
+  );
+
+  if (!fs.existsSync(samplesPath)) {
+    console.error("❌ samples.json が存在しません。generator.js を先に実行してください");
+    process.exit(1);
   }
-}
 
-/**
- * --- Load Golden Baseline ---
- */
-function loadGolden() {
-  const files = fs.readdirSync(CONFIG.goldenDir)
-    .filter(f => f.endsWith(".json"))
-    .map(f => path.join(CONFIG.goldenDir, f));
+  const samples = JSON.parse(fs.readFileSync(samplesPath, "utf-8"));
+  const validators = await loadValidatorRunners();
 
-  const out = [];
-  for (const fp of files) {
-    out.push(JSON.parse(fs.readFileSync(fp, "utf8")));
-  }
-  return out;
-}
-
-/**
- * --- Execute Validator ---
- * JS (Zod), Python (Pydantic), Go, Firestore Rules に対応
- */
-function runValidator(type, input) {
-  const vdir = CONFIG.validatorsDir;
-
-  switch (type) {
-    case "zod": {
-      const fp = path.join(vdir, "zod.js");
-      const p = spawnSync("node", [fp], {
-        input: JSON.stringify(input),
-        encoding: "utf8"
-      });
-      return p.stdout.trim();
-    }
-
-    case "pydantic": {
-      const fp = path.join(vdir, "pydantic.py");
-      const p = spawnSync("python3", [fp], {
-        input: JSON.stringify(input),
-        encoding: "utf8"
-      });
-      return p.stdout.trim();
-    }
-
-    case "go": {
-      const fp = path.join(vdir, "go.go");
-      const p = spawnSync("go", ["run", fp], {
-        input: JSON.stringify(input),
-        encoding: "utf8"
-      });
-      return p.stdout.trim();
-    }
-
-    case "firestore": {
-      const fp = path.join(vdir, "firestore.rules.gen");
-      const p = spawnSync("node", [fp], {
-        input: JSON.stringify(input),
-        encoding: "utf8"
-      });
-      return p.stdout.trim();
-    }
-
-    default:
-      return `ERROR: Unknown validator ${type}`;
-  }
-}
-
-/**
- * --- Compare expected vs actual ---
- */
-function computeDiff(expected, actual) {
-  if (expected === actual) return null;
-  return { expected, actual };
-}
-
-/**
- * --- Save CI diff snapshot ---
- */
-function saveDiff(id, diffs) {
-  ensure(CONFIG.outDir);
-
-  const fp = path.join(CONFIG.outDir, `${id}.diff.json`);
-  fs.writeFileSync(fp, JSON.stringify(diffs, null, 2), "utf8");
-}
-
-/**
- * --- Main Runner ---
- */
-function main() {
-  console.log("Golden Test Runner: START");
-
-  const golden = loadGolden();
   const results = [];
 
-  for (const entry of golden) {
-    const { id, input, expected, validators } = entry;
-
-    const row = { id, validators: {}, diff: {} };
-    let hasDiff = false;
-
-    for (const v of validators) {
-      const actual = runValidator(v, input);
-      const diff = computeDiff(expected[v], actual);
-
-      row.validators[v] = { actual };
-      if (diff) {
-        row.diff[v] = diff;
-        hasDiff = true;
-      }
+  for (const v of validators) {
+    for (const sample of samples) {
+      const r = await v.run(sample.input);
+      results.push({
+        validator: v.name,
+        sample: sample.name,
+        result: r,
+      });
     }
-
-    if (hasDiff) {
-      saveDiff(id, row.diff);
-    }
-
-    results.push(row);
   }
 
-  const summaryPath = path.join(CONFIG.snapshotDir, "runner-output.json");
-  ensure(CONFIG.snapshotDir);
-  fs.writeFileSync(summaryPath, JSON.stringify(results, null, 2), "utf8");
+  const outDir = path.join(process.cwd(), "golden-tests", "output");
+  const out = path.join(outDir, "combined-results.json");
+  fs.writeFileSync(out, JSON.stringify(results, null, 2));
 
-  console.log("Golden Test Runner: DONE");
+  console.log(`✔ Combined validation output → ${out}`);
 }
 
-main();
-
+run();
