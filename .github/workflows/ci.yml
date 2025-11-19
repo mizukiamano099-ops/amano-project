@@ -1,1 +1,15 @@
+name: Basic CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Hello Action
+        run: echo "CI が動作しています！"
 
