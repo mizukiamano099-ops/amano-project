@@ -1,109 +1,88 @@
-/**
- * Golden Table Generator
- * -----------------------
- * スキーマ（IR）を読み取り、Golden Baseline（expected output）を
- * 自動生成するスクリプト。
- *
- * このスクリプトは CI / ローカルのどちらからも呼び出される。
- */
+// golden-tests/generator.js
+//
+// Golden Table Generator
+// - IR から canonical 化された Zod/Pydantic/Firestore 各値を生成
+// - validators/{validator}/runner.js を呼び出し Golden Table を生成する
+// - 出力: ./golden-tests/output/*.json
+//
 
 const fs = require("fs");
 const path = require("path");
 
-/** 入力ディレクトリと出力ディレクトリ */
-const CONFIG = {
-  irPath: path.join(__dirname, "config.json"),            // IR / schema
-  goldenOut: path.join(__dirname, "golden"),              // expected outputs
-  snapshotOut: path.join(__dirname, "snapshots"),         // CI snapshot
-};
+async function loadValidators() {
+  const validatorsDir = path.join(process.cwd(), "validators");
+  const entries = fs.readdirSync(validatorsDir, { withFileTypes: true });
 
-/**
- * Golden Table の書式：
- * {
- *   id: string,
- *   input: any,
- *   expected: any,
- *   validators: ["zod", "pydantic", "go", "firestore"],
- * }
- */
+  const validators = entries
+    .filter((e) => e.isDirectory())
+    .map((dir) => ({
+      name: dir.name,
+      runner: path.join(validatorsDir, dir.name, "runner.js"),
+    }));
 
-/**
- * === Utility: Ensure directory exists ===
- */
-function ensure(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  return validators;
+}
+
+// ↓ Golden Test 的に最重要：生成するデータセット（サンプル）
+function buildGoldenSamples() {
+  return [
+    {
+      name: "valid_structural_config",
+      input: {
+        id: "550e8400-e29b-41d4-a716-446655440000",
+        timestamp: "2025-01-01T00:00:00Z",
+        temperature: 22.5,
+        pressure: 1012.8,
+        mode: "AUTO",
+      },
+    },
+    {
+      name: "invalid_missing_id",
+      input: {
+        timestamp: "2025-01-01T00:00:00Z",
+        temperature: 22.5,
+        pressure: 1012.8,
+        mode: "AUTO",
+      },
+    },
+    {
+      name: "invalid_pressure_low",
+      input: {
+        id: "550e8400-e29b-41d4-a716-446655440000",
+        timestamp: "2025-01-01T00:00:00Z",
+        temperature: 22.5,
+        pressure: 100, // too low
+        mode: "AUTO",
+      },
+    },
+  ];
+}
+
+async function run() {
+  const validators = await loadValidators();
+  const samples = buildGoldenSamples();
+
+  const outDir = path.join(process.cwd(), "golden-tests", "output");
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+
+  for (const v of validators) {
+    const tester = require(v.runner);
+
+    const results = [];
+    for (const s of samples) {
+      const r = await tester(s.input);
+      results.push({
+        sample: s.name,
+        input: s.input,
+        validator: v.name,
+        output: r,
+      });
+    }
+
+    const outPath = path.join(outDir, `${v.name}.json`);
+    fs.writeFileSync(outPath, JSON.stringify(results, null, 2));
+    console.log(`✔ Generated: ${outPath}`);
   }
 }
 
-/**
- * === Load IR (Intermediate Representation) ===
- */
-function loadIR() {
-  const t = fs.readFileSync(CONFIG.irPath, "utf8");
-  return JSON.parse(t);
-}
-
-/**
- * === Golden Baseline Generator（メインロジック） ===
- *
- * IR → Golden 形式に変換。
- */
-function generateGolden(ir) {
-  const output = [];
-
-  for (const schema of ir.schemas || []) {
-    const id = schema.id || `schema_${schema.name}`;
-
-    const entry = {
-      id,
-      input: schema.sample || {},
-      expected: schema.expected || {},
-      validators: ["zod", "pydantic", "go", "firestore"],
-    };
-
-    output.push(entry);
-  }
-
-  return output;
-}
-
-/**
- * === Save Golden Baselines ===
- */
-function saveGolden(entries) {
-  ensure(CONFIG.goldenOut);
-
-  for (const item of entries) {
-    const fp = path.join(CONFIG.goldenOut, `${item.id}.json`);
-    fs.writeFileSync(fp, JSON.stringify(item, null, 2), "utf8");
-  }
-}
-
-/**
- * === Save Snapshot for CI ===
- */
-function saveSnapshot(entries) {
-  ensure(CONFIG.snapshotOut);
-
-  const fp = path.join(CONFIG.snapshotOut, "snapshot.json");
-  fs.writeFileSync(fp, JSON.stringify(entries, null, 2), "utf8");
-}
-
-/**
- * === Main ===
- */
-function main() {
-  console.log("Golden Table Generator: START");
-
-  const ir = loadIR();
-  const golden = generateGolden(ir);
-
-  saveGolden(golden);
-  saveSnapshot(golden);
-
-  console.log("Golden Table Generator: DONE");
-}
-
-main();
-
+run();
