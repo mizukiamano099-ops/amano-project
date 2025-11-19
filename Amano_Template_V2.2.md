@@ -232,7 +232,8 @@ Check: [Consistency(L2), Consistency(L3)]
 * 「曖昧な一人称」は存在しないか？
 
 ---
-
+test
 # **Amano Template V2.2 ― 完全版 終了**
 
 ---
+
