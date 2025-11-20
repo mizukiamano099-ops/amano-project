@@ -1,13 +1,20 @@
 {
   "scripts": {
-    "golden:generate": "node tests/golden/generator.js",
-    "golden:test": "node tests/golden/runner.js",
-    "test:golden": "npm run golden:generate && npm run golden:test"
-  }
-}
+    /* ------------------------------------------
+     * Golden Test 系コマンド
+     * ------------------------------------------ */
 
-{
-  "scripts": {
-    "golden:update": "cp -r tests/golden/output/* tests/golden/snapshots/"
+    // IR → Zod 出力を生成し、スナップショットと比較
+    "test:golden": "node tests/golden/runner.js",
+
+    // スナップショットを更新 (--update フラグによる)
+    "update:golden": "node tests/golden/runner.js --update",
+
+    /* ------------------------------------------
+     * 以前の generator.js がある場合の互換性
+     * （現在は src/cli/index.js が統合しているため基本不要）
+     * ------------------------------------------ */
+    "golden:generate": "node tests/golden/generator.js",
+    "golden:test": "node tests/golden/runner.js"
   }
 }
