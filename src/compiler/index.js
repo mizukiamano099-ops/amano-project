@@ -1,72 +1,101 @@
-// src/compiler/index.js
+// index.js
 //
-// Compiler pipeline のエントリポイント
-// Lex -> Parse -> Canonicalize を一貫して実行するユーティリティ。
-// 小さい CLI も実装しており、ファイルを読み込んで canonical IR を JSON 出力できます。
+// コンパイラのエントリポイント。
+// compile(sourceCode, emitterType) を公開し、
+// lexer → parser → canonicalizer → validator → emitter
+// のフルパイプラインを実行する。
 
-const fs = require('fs');
-const path = require('path');
-const { tokenize } = require('./lexer');
-const { parse } = require('./parser');
-const { canonicalize } = require('./canonicalizer');
+const { tokenize } = require("./lexer");
+const { parse } = require("./parser");
+const { canonicalize } = require("./canonicalizer");
+const { validateIR } = require("./validator");
+const fs = require("fs");
+const path = require("path");
 
-/**
- * パイプライン：テキスト入力から最終正規化 IR を返す
- * @param {string} text
- * @param {object} [opts]
- */
-function compileText(text, opts = {}) {
-  // 1) ぱっと確認できる簡易的トークン列（デバッグ用）
-  const tokens = tokenize(text);
-
-  // 2) パース
-  const ir = parse(text);
-
-  // 3) 正規化
-  const canonical = canonicalize(ir, opts);
-
-  return { tokens, ir, canonical };
-}
-
-/**
- * ファイルからコンパイルして結果をファイルへ保存するユーティリティ
- * @param {string} inputPath
- * @param {string} outPath - JSON 出力先
- */
-function compileFile(inputPath, outPath) {
-  const txt = fs.readFileSync(inputPath, 'utf-8');
-  const res = compileText(txt, { strict: false });
-  fs.writeFileSync(outPath, JSON.stringify(res.canonical, null, 2), 'utf-8');
-  return res;
-}
-
-/**
- * 簡易 CLI 実装
- * node src/compiler/index.js input.txt out.json
- */
-if (require.main === module) {
-  const argv = process.argv.slice(2);
-  if (argv.length < 1) {
-    console.log('Usage: node src/compiler/index.js <input-file> [<out-json>]');
-    process.exit(1);
+// -----------------------------------------------------
+// import 解決用プリプロセッサ
+// -----------------------------------------------------
+function resolveImports(filePath, visited = new Set()) {
+  const abs = path.resolve(filePath);
+  if (visited.has(abs)) {
+    throw new Error("循環 import が検出されました: " + abs);
   }
-  const input = argv[0];
-  const out = argv[1] || path.basename(input, path.extname(input)) + '.canonical.json';
-  try {
-    const res = compileFile(input, out);
-    console.log('Canonical IR written to', out);
-    if (process.env.DEBUG_TOKENS === '1') {
-      console.log('Tokens:', JSON.stringify(res.tokens, null, 2));
-      console.log('IR:', JSON.stringify(res.ir, null, 2));
+  visited.add(abs);
+
+  const dir = path.dirname(abs);
+  const text = fs.readFileSync(abs, "utf8");
+  const lines = text.split(/\r?\n/);
+  const out = [];
+
+  for (const line of lines) {
+    const m = line.match(/^\s*@import\s+["'](.+?)["']/);
+    if (m) {
+      const target = m[1];
+      const targetPath = path.isAbsolute(target)
+        ? target
+        : path.join(dir, target);
+
+      if (!fs.existsSync(targetPath)) {
+        throw new Error(`import 先が存在しません: ${targetPath}`);
+      }
+
+      out.push(resolveImports(targetPath, visited));
+    } else {
+      out.push(line);
     }
-  } catch (err) {
-    console.error('Compile error:', err.message);
-    process.exit(2);
   }
+
+  return out.join("\n");
 }
 
-// エクスポート
+// -----------------------------------------------------
+// メインコンパイル関数
+// -----------------------------------------------------
+async function compile(sourceCode, emitterType = null) {
+  // lexer: tokenize
+  const tokens = tokenize(sourceCode);
+
+  // parser: AST生成
+  const ast = parse(sourceCode);
+
+  // canonicalizer: AST → IR
+  const ir = canonicalize(ast);
+
+  // validator: IR検証
+  const validation = validateIR(ir);
+  if (!validation.valid) {
+    throw new Error(
+      "IR 検証エラー:\n" + validation.errors.map(e => " - " + e).join("\n")
+    );
+  }
+
+  // emitter: 必要ならコード生成
+  if (emitterType) {
+    const emitterPath = path.resolve(
+      __dirname,
+      "..",
+      "emitters",
+      emitterType,
+      `${emitterType}-emitter.js`
+    );
+
+    if (!fs.existsSync(emitterPath)) {
+      throw new Error("指定されたエミッタが存在しません: " + emitterPath);
+    }
+
+    const emitter = require(emitterPath);
+    if (typeof emitter.emit !== "function") {
+      throw new Error("emitter は emit(ir) を export する必要があります");
+    }
+
+    const generated = await emitter.emit(ir);
+    return { ir, generated };
+  }
+
+  return { ir };
+}
+
 module.exports = {
-  compileText,
-  compileFile
+  compile,
+  resolveImports
 };
