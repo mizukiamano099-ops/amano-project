@@ -1,11 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "test:golden": "node tests/golden/runner.js",
-    "update:golden": "node tests/golden/runner.js --update",
     "golden:generate": "node tests/golden/generator.js",
-    "golden:test": "node tests/golden/runner.js"
-    "test:golden": "node tests/golden/runner.mjs",
+    "golden:test": "node tests/golden/runner.mjs",
+    "test:golden": "npm run golden:generate && npm run golden:test",
     "update:golden": "node tests/golden/runner.mjs --update"
   }
 }
