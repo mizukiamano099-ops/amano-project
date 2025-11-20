@@ -1,0 +1,39 @@
+name: Golden Test (Zod Emitter)
+
+# 実行トリガー: mainへのプッシュ、プルリクエスト、および手動実行
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  golden-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. リポジトリのチェックアウト
+        uses: actions/checkout@v4
+
+      - name: 2. Node.js環境のセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # 利用しているNodeバージョンに合わせてください
+
+      - name: 3. 依存関係のインストール
+        # package.jsonで定義された依存関係をインストール
+        run: npm install
+
+      - name: 4. ゴールデンテストの実行 (比較モード)
+        id: test
+        # Emitterが生成したコードと、既存のスナップショットを比較します
+        run: npm run test:golden
+
+      - name: 5. 失敗時のスナップショットの差分表示
+        # テストが失敗した場合のみ、エラーメッセージと対処法を表示
+        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        run: |
+          echo "::error::Golden Test failed! A code change has modified the output."
+          echo "::error::If this change is intentional, please run the 'Snapshot Update Mode' in CI and commit the new snapshot."
