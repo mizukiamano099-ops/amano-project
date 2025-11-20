@@ -1,4 +1,5 @@
 name: Golden Test Comparison
+
 on:
   push:
     branches: [ main ]
@@ -8,34 +9,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: 1. ソースコードのチェックアウト
+      # 1. リポジトリを取得
+      - name: Checkout source
         uses: actions/checkout@v4
-        
-      - name: 2. Node.jsのセットアップ
+
+      # 2. Node.js 環境をセットアップ
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # テストがESMを使用しているため、比較的新しいNode.jsバージョンを使用します
           node-version: '20'
 
-      - name: 3. 依存関係のインストール
-        run: npm ci
+      # 3. package-lock が無いので npm ci は使わない → npm install に変更
+      - name: Install dependencies
+        run: npm install
 
-      - name: 4. ゴールデンテストの実行 (比較モード)
-        id: test
-        # Emitterが生成したコードと、既存のスナップショットを比較します
-        # 【修正箇所】: import/export構文のエラー (SyntaxError: Cannot use import statement outside a module) 
-        # を回避するため、環境変数 NODE_OPTIONS を設定し、ts-nodeをES Modulesとして実行します。
+      # 4. ゴールデンテストを ESM モードで実行
+      - name: Run Golden Tests (ESM compatible)
+        id: golden
         run: |
-          # NODE_OPTIONSを設定することで、npm runが呼び出すNode.jsプロセスに
-          # ts-nodeのESMローダーを適用し、import構文を正しく処理させます。
-          export NODE_OPTIONS="--loader ts-node/esm"
-          npm run test:golden
+          # import を許可するため Node を ESM モードで実行
+          node --experimental-modules tests/golden/runner.js
 
-      - name: 5. 失敗時のスナップショットの差分表示
-        if: ${{ failure() }}
+      # 5. 失敗時にメッセージを表示（diff コマンドは存在しないため削除）
+      - name: Snapshot check failed
+        if: failure()
         run: |
-          echo "::error::Golden tests failed. Please check the generated files."
-          # スナップショットの差分を確認するコマンドを仮定
-          npm run diff:golden
+          echo "::error::Golden Test failed. Check test output above."
