@@ -1,39 +1,41 @@
-name: Golden Test (Zod Emitter)
-
-# 実行トリガー: mainへのプッシュ、プルリクエスト、および手動実行
+name: Golden Test Comparison
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
-  golden-test:
+  build:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: 1. リポジトリのチェックアウト
+      - name: 1. ソースコードのチェックアウト
         uses: actions/checkout@v4
-
-      - name: 2. Node.js環境のセットアップ
+        
+      - name: 2. Node.jsのセットアップ
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # 利用しているNodeバージョンに合わせてください
+          # テストがESMを使用しているため、比較的新しいNode.jsバージョンを使用します
+          node-version: '20'
 
       - name: 3. 依存関係のインストール
-        # package.jsonで定義された依存関係をインストール
-        run: npm install
+        run: npm ci
 
       - name: 4. ゴールデンテストの実行 (比較モード)
         id: test
         # Emitterが生成したコードと、既存のスナップショットを比較します
-        run: npm run test:golden
+        # 【修正箇所】: import/export構文のエラー (SyntaxError: Cannot use import statement outside a module) 
+        # を回避するため、環境変数 NODE_OPTIONS を設定し、ts-nodeをES Modulesとして実行します。
+        run: |
+          # NODE_OPTIONSを設定することで、npm runが呼び出すNode.jsプロセスに
+          # ts-nodeのESMローダーを適用し、import構文を正しく処理させます。
+          export NODE_OPTIONS="--loader ts-node/esm"
+          npm run test:golden
 
       - name: 5. 失敗時のスナップショットの差分表示
-        # テストが失敗した場合のみ、エラーメッセージと対処法を表示
-        if: ${{ failure() && steps.test.outcome == 'failure' }}
+        if: ${{ failure() }}
         run: |
-          echo "::error::Golden Test failed! A code change has modified the output."
-          echo "::error::If this change is intentional, please run the 'Snapshot Update Mode' in CI and commit the new snapshot."
+          echo "::error::Golden tests failed. Please check the generated files."
+          # スナップショットの差分を確認するコマンドを仮定
+          npm run diff:golden
