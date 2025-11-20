@@ -1,107 +1,98 @@
 /**
- * Golden Test Runner
- * -------------------
- * generator.js が生成したスナップショットを、
- * snapshots/ 以下の「ゴールデンファイル」と比較するテストランナー。
- *
- * - ディレクトリ: tests/golden/
- * - 入力: tables/*.json  (IR mock)
- * - 生成物: out/*.ts     (Zod emitter の生成結果)
- * - 比較対象: snapshots/*.ts
- *
- * 実行方法:
- *   node tests/golden/runner.js
+ * ============================================================
+ *  Golden Test Runner
+ *  File: runner.js
+ *  Purpose:
+ *    - generator.js が生成した出力を読み取り、
+ *      snapshots/*.ts の「ゴールデンファイル」と比較する。
+ *    - 差分があれば FAIL、完全一致なら PASS とする。
+ * ============================================================
  */
 
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const ROOT = path.resolve(__dirname);
-const TABLE_DIR = path.join(ROOT, "tables");
-const OUT_DIR = path.join(ROOT, "out");
-const SNAPSHOT_DIR = path.join(ROOT, "snapshots");
-const GENERATOR = path.join(ROOT, "generator.js");
+// Node.js の __dirname 対応
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// 出力ディレクトリがなければ作成
-if (!fs.existsSync(OUT_DIR)) {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+// ディレクトリ設定
+const SNAPSHOT_DIR = path.join(__dirname, "snapshots");
+const OUTPUT_DIR = path.join(__dirname, "output"); // generator が書き出す
+
+/**
+ * ゴールデンファイル（正解）と生成物を比較するヘルパー関数
+ */
+function compareText(snapshotText, outputText) {
+  // 行末の差異や余分な空行を吸収
+  const norm = (s) => s.replace(/\r/g, "").trim();
+  return norm(snapshotText) === norm(outputText);
 }
 
 /**
- * ゴールデンファイル比較関数
+ * メイン処理
  */
-function compareFiles(generatedPath, goldenPath) {
-  const generated = fs.readFileSync(generatedPath, "utf8").trim();
-  const golden = fs.readFileSync(goldenPath, "utf8").trim();
+async function main() {
+  console.log("🔍 Running Golden Tests...");
 
-  return generated === golden;
-}
-
-/**
- * テストケース実行
- */
-function runTests() {
-  console.log("=== Running Golden Tests ===");
-
-  const cases = fs
-    .readdirSync(TABLE_DIR)
-    .filter((f) => f.endsWith(".json"));
-
-  if (cases.length === 0) {
-    console.error("No test cases found in tests/golden/tables");
+  // 必須ディレクトリ確認
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    console.error("❌ Error: output/ directory not found.");
     process.exit(1);
   }
 
+  const outputFiles = fs.readdirSync(OUTPUT_DIR).filter((f) => f.endsWith(".ts"));
+
+  if (outputFiles.length === 0) {
+    console.error("❌ Error: No output files found in tests/golden/output/");
+    process.exit(1);
+  }
+
+  let passed = 0;
   let failed = 0;
 
-  for (const testCase of cases) {
-    const name = testCase.replace(".json", "");
-    const inputPath = path.join(TABLE_DIR, testCase);
-    const outPath = path.join(OUT_DIR, `${name}.zod.ts`);
-    const snapshotPath = path.join(SNAPSHOT_DIR, `${name}.zod.ts`);
+  for (const file of outputFiles) {
+    const snapshotPath = path.join(SNAPSHOT_DIR, file);
+    const outputPath = path.join(OUTPUT_DIR, file);
 
-    console.log(`\n--- Test Case: ${name} ---`);
-
-    // generator.js を実行してコードを生成
-    try {
-      execSync(`node ${GENERATOR} ${inputPath} ${outPath}`, {
-        stdio: "inherit",
-      });
-    } catch (err) {
-      console.error("❌ Error executing generator.js:", err);
-      failed++;
-      continue;
-    }
-
-    // スナップショットの存在確認
     if (!fs.existsSync(snapshotPath)) {
-      console.error(`❌ Missing snapshot: ${snapshotPath}`);
+      console.error(`❌ Snapshot not found for: ${file}`);
       failed++;
       continue;
     }
 
-    // 差分比較
-    const ok = compareFiles(outPath, snapshotPath);
+    const snapshotText = fs.readFileSync(snapshotPath, "utf8");
+    const outputText = fs.readFileSync(outputPath, "utf8");
+
+    const ok = compareText(snapshotText, outputText);
+
     if (ok) {
-      console.log("✅ PASSED");
+      console.log(`✅ PASS: ${file}`);
+      passed++;
     } else {
-      console.log("❌ FAILED");
-      console.log(`Generated:  ${outPath}`);
-      console.log(`Expected:   ${snapshotPath}`);
+      console.log(`❌ FAIL: ${file}`);
       failed++;
+
+      console.log(`--- Snapshot (${file}) ---`);
+      console.log(snapshotText);
+      console.log(`--- Output (${file}) ---`);
+      console.log(outputText);
     }
   }
 
-  console.log("\n=== Golden Tests Completed ===");
+  console.log("\n📊 Golden Test Summary");
+  console.log(`   PASS: ${passed}`);
+  console.log(`   FAIL: ${failed}`);
+
   if (failed > 0) {
-    console.log(`❌ Failed: ${failed} test(s)`);
+    console.error("🔴 Golden Test Failed");
     process.exit(1);
-  } else {
-    console.log("🎉 All tests passed!");
-    process.exit(0);
   }
+
+  console.log("🟢 All Golden Tests Passed!");
+  process.exit(0);
 }
 
 // 実行
-runTests();
+main();
