@@ -1,6 +1,4 @@
-@@ -1,9 +1,7 @@
 {
-  "type": "module"
   "type": "module",
   "scripts": {
     "test:golden": "node tests/golden/runner.js",
