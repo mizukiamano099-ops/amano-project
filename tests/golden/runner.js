@@ -1,5 +1,5 @@
 /**
- * Golden Test Runner
+ * Golden Test Runner (ESM)
  * ------------------------
  * - ZodEmitter の出力とスナップショットの比較を行う
  * - `--update` フラグでスナップショットを自動更新
@@ -8,10 +8,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-
-// CLI パイプライン（既存）
 import { compileIR } from "../../src/cli/index.js";
 
+// __dirname をESMで再構築
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -56,7 +55,7 @@ function readSnapshot() {
   const ir = readJSON(INPUT_IR);
 
   console.log("[GoldenTest] Generating output via compileIR()");
-  const generatedCode = await compileIR(ir, "zod"); // emitterType: zod
+  const generatedCode = await compileIR(ir, "zod");
 
   const existingSnapshot = readSnapshot();
 
@@ -68,19 +67,16 @@ function readSnapshot() {
     return;
   }
 
-  // -------------------------
-  // 比較モード（差分あり → エラー）
-  // -------------------------
   if (!existingSnapshot) {
     console.error("[GoldenTest] ERROR: Snapshot file does not exist.");
     console.error("           Run with --update to create it:");
-    console.error("           node runner.js --update");
+    console.error("           node runner.mjs --update");
     process.exit(1);
   }
 
   if (existingSnapshot.trim() !== generatedCode.trim()) {
     console.error("[GoldenTest] ❌ Snapshot mismatch detected!");
-    console.error("Run with: node runner.js --update");
+    console.error("Run with: node runner.mjs --update");
     process.exit(1);
   }
 
