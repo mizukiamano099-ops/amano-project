@@ -1,9 +1,7 @@
 {
-  "type": "module"
+  "type": "module",
   "scripts": {
-    "test:golden": "node tests/golden/runner.js",
-    "update:golden": "node tests/golden/runner.js --update",
-    "golden:generate": "node tests/golden/generator.js",
-    "golden:test": "node tests/golden/runner.js"
+    "test:golden": "node tests/golden/runner.mjs",
+    "update:golden": "node tests/golden/runner.mjs --update"
   }
 }
