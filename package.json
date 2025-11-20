@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "golden:generate": "node tests/golden/generator.js",
+    "golden:test": "node tests/golden/runner.js",
+    "test:golden": "npm run golden:generate && npm run golden:test"
+  }
+}
