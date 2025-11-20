@@ -1,43 +1,34 @@
 {
-    // コンテナの名前
-    "name": "Canonical Codegen Development",
+  "name": "Amano-Project DevContainer",
+  "dockerFile": "Dockerfile",
 
-    // DevContainerのベースとしてローカルのDockerfileを使用
-    "build": {
-        "dockerfile": "Dockerfile",
-        // buildコンテキストはルートディレクトリ
-        "context": ".." 
+  "settings": {
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "editor.formatOnSave": true,
+    "files.insertFinalNewline": true
+  },
+
+  "postCreateCommand": "npm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-tslint-plugin",
+        "ms-vscode.js-debug",
+        "ms-vscode.makefile-tools"
+      ]
+    }
+  },
+
+  "remoteUser": "node",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
     },
-
-    // コンテナ内で使用するデフォルトの作業ディレクトリ
-    "workspaceFolder": "/usr/src/app",
-
-    // コンテナ作成後に自動的に実行されるコマンド
-    "postCreateCommand": "npm install",
-
-    // VSCodeの推奨設定
-    "customizations": {
-        "vscode": {
-            "settings": {
-                // ファイルの自動保存を有効にする
-                "files.autoSave": "afterDelay",
-                // デフォルトのシェルをbashに設定
-                "terminal.integrated.defaultProfile.linux": "bash"
-            },
-            // 推奨拡張機能
-            "extensions": [
-                "esbenp.prettier-vscode",
-                "dbaeumer.vscode-eslint",
-                "ms-vscode.node-debug2",
-                "firsttris.vscode-jest-runner",
-                "orta.vscode-jest"
-            ]
-        }
-    },
-
-    // ポートフォワーディングの設定 (Firebaseエミュレータなどで必要になる可能性を考慮)
-    // "forwardPorts": [5000, 8080],
-
-    // rootユーザーではなく、非rootユーザーとして実行
-    "remoteUser": "node"
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  }
 }
