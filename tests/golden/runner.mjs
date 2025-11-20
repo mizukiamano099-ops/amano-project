@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // -------------------------
-// 設定
+// 定数設定
 // -------------------------
 const INPUT_IR = path.join(__dirname, "tables/schema_zod_test.json");
 const SNAPSHOT_FILE = path.join(
