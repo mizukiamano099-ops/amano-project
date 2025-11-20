@@ -1,21 +1,27 @@
 /**
  * Golden Test Runner (ESM)
- * ------------------------
- * - ZodEmitter の出力とスナップショットの比較を行う
- * - `--update` フラグでスナップショットを自動更新
+ * ------------------------------------------
+ * - compileIR() の出力とスナップショット比較
+ * - `--update` でスナップショット更新
  */
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { compileIR } from "../../src/compiler/index.js";
 
-// __dirname をESMで再構築
+// compileIR の取得（絶対パス解決）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// src/compiler/index.js への絶対パス
+const compilerPath = path.resolve(
+  __dirname,
+  "../../src/compiler/index.js"
+);
+const { compileIR } = await import(compilerPath);
+
 // -------------------------
-// 定数設定
+// 設定
 // -------------------------
 const INPUT_IR = path.join(__dirname, "tables/schema_zod_test.json");
 const SNAPSHOT_FILE = path.join(
@@ -24,7 +30,7 @@ const SNAPSHOT_FILE = path.join(
 );
 
 // -------------------------
-// コマンドライン引数
+// CLI Options
 // -------------------------
 const args = process.argv.slice(2);
 const UPDATE_MODE = args.includes("--update") || args.includes("-u");
@@ -68,15 +74,16 @@ function readSnapshot() {
   }
 
   if (!existingSnapshot) {
-    console.error("[GoldenTest] ERROR: Snapshot file does not exist.");
-    console.error("           Run with --update to create it:");
-    console.error("           node runner.mjs --update");
+    console.error("[GoldenTest] ERROR: Snapshot does not exist.");
+    console.error("Run with:");
+    console.error("  node runner.mjs --update");
     process.exit(1);
   }
 
   if (existingSnapshot.trim() !== generatedCode.trim()) {
     console.error("[GoldenTest] ❌ Snapshot mismatch detected!");
-    console.error("Run with: node runner.mjs --update");
+    console.error("Run:");
+    console.error("  node runner.mjs --update");
     process.exit(1);
   }
 
