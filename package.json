@@ -1,4 +1,7 @@
 {
+  "type": "module"
+}
+{
   "scripts": {
     "test:golden": "node tests/golden/runner.js",
     "update:golden": "node tests/golden/runner.js --update",
