@@ -4,10 +4,10 @@
 // lexer → parser → canonicalizer → validator → emitter
 // -----------------------------------------------------------------------------
 
-import tokenize from "./lexer.js";
-import parse from "./parser.js";
-import canonicalize from "./canonicalizer.js";
-import validateIR from "./validator.js";
+import { canonicalize } from "./canonicalizer.js";
+import { validateIR } from "./validator.js";
+import { parse } from "./parser.js";
+import { tokenize } from "./lexer.js";
 
 // Emitter
 import { ZodEmitter } from "../emitters/zod/zod-emitter.js";
