@@ -1,97 +1,55 @@
-// -----------------------------------------------------------------------------
-// index.js (ESM)
-// コンパイラのエントリポイント。
-// lexer → parser → canonicalizer → validator → emitter
-// -----------------------------------------------------------------------------
-
+// CommonJS (require) から ESM (import) へ変換
+// Note: Node.jsのESMでは、相対パスでのインポートに拡張子 (.js) が必須です。
+import { tokenize } from "./lexer.js";
+import { parse } from "./parser.js";
 import { canonicalize } from "./canonicalizer.js";
 import { validateIR } from "./validator.js";
-import { parse } from "./parser.js";
-import { tokenize } from "./lexer.js";
 
-// Emitter
-import { ZodEmitter } from "../emitters/zod/zod-emitter.js";
+/**
+ * 抽象構文木 (AST) を受け取り、指定されたターゲット言語のコードを生成します。
+ * エミッターの動的インポートを含むため、非同期関数 (async function) となります。
+ *
+ * @param {object} ast - コンパイル対象の抽象構文木 (AST)。
+ * @param {string} target - 'zod', 'firestore' などのターゲットエミッター名。
+ * @returns {Promise<string>} 生成されたコードを解決するPromise。
+ */
+export async function compileIR(ast, target) {
+  // 1. 字句解析を実行（具体的な実装はlexer.js内）
+  const tokens = tokenize(ast);
 
-// 今後増えるエミッタをここに登録する
-const EMITTERS = {
-  zod: ZodEmitter,
-};
+  // 2. 構文解析を実行（具体的な実装はparser.js内）
+  const rawIR = parse(tokens);
 
-// -----------------------------------------------------------------------------
-// import 解決（DSL ファイル用）
-// -----------------------------------------------------------------------------
-import fs from "fs";
-import path from "path";
+  // 3. IRを正規化
+  const ir = canonicalize(rawIR);
 
-export function resolveImports(filePath, visited = new Set()) {
-  const abs = path.resolve(filePath);
-
-  if (visited.has(abs)) {
-    throw new Error(`循環 import が検出されました: ${abs}`);
-  }
-  visited.add(abs);
-
-  const dir = path.dirname(abs);
-  const text = fs.readFileSync(abs, "utf8");
-  const lines = text.split(/\r?\n/);
-
-  let out = [];
-
-  for (const line of lines) {
-    const m = line.match(/^\s*@import\s+"(.+?)"\s*;/);
-    if (m) {
-      const importPath = path.resolve(dir, m[1]);
-      const imported = resolveImports(importPath, visited);
-      out.push(imported);
-    } else {
-      out.push(line);
-    }
-  }
-
-  return out.join("\n");
-}
-
-// -----------------------------------------------------------------------------
-// compileIR（Golden Test/CLI用）
-// ir: JSON IR
-// emitterType: "zod" など
-// -----------------------------------------------------------------------------
-export async function compileIR(ir, emitterType = "zod") {
-  if (!EMITTERS[emitterType]) {
-    throw new Error(`Emitter '${emitterType}' が存在しません。`);
-  }
-
-  // 1️⃣ IR 検証
+  // 4. IRのバリデーションを実行
   validateIR(ir);
 
-  // 2️⃣ Emitter 生成
-  const emitter = new EMITTERS[emitterType]();
+  // 5. ターゲットエミッターのパスを決定
+  let emitterPath;
+  switch (target) {
+    case "zod":
+      // index.js から見て: ../emitters/zod/zod-emitter.js
+      emitterPath = "../emitters/zod/zod-emitter.js";
+      break;
+    case "firestore":
+      emitterPath = "../emitters/firestore/firestore-emitter.js";
+      break;
+    default:
+      throw new Error(`Unsupported target emitter: ${target}`);
+  }
 
-  // 3️⃣ コード生成
-  const result = emitter.emit(ir);
+  // 6. エミッターを動的インポート (非同期)
+  const emitterModule = await import(emitterPath);
 
-  return result;
+  if (typeof emitterModule.emit !== 'function') {
+    throw new Error(`Emitter module at ${emitterPath} must export 'emit' function.`);
+  }
+
+  // 7. コード生成を実行
+  return emitterModule.emit(ir);
 }
 
-// -----------------------------------------------------------------------------
-// compile(sourceFile, emitterType)
-// DSL ファイルを読み込んで実行する CLI 用
-// -----------------------------------------------------------------------------
-export async function compile(sourceFile, emitterType = "zod") {
-  const source = resolveImports(sourceFile);
-
-  // 1. 字句解析
-  const tokens = tokenize(source);
-
-  // 2. パース → AST
-  const ast = parse(tokens);
-
-  // 3. AST → IR
-  const ir = canonicalize(ast);
-
-  // 4. IR 検証
-  validateIR(ir);
-
-  // 5. 出力
-  return compileIR(ir, emitterType);
-}
+// compileIRを名前付きエクスポートとして定義 (runner.mjsがインポートするため)
+// export function compileIR(...) は上で定義済み
