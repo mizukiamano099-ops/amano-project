@@ -1,0 +1,57 @@
+{
+  "entities": [
+    {
+      "name": "User",
+      "fields": [
+        {
+          "name": "id",
+          "type": "Int",
+          "isNullable": false
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "isNullable": false,
+          "isUnique": true
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "isNullable": true
+        },
+        {
+          "name": "posts",
+          "type": "Post[]",
+          "isRelation": true,
+          "isNullable": true
+        }
+      ]
+    },
+    {
+      "name": "Post",
+      "fields": [
+        {
+          "name": "id",
+          "type": "Int",
+          "isNullable": false
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "isNullable": false
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "isNullable": true
+        },
+        {
+          "name": "author",
+          "type": "User",
+          "isRelation": true,
+          "isNullable": false
+        }
+      ]
+    }
+  ]
+}
