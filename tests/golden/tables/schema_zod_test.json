@@ -1,0 +1,160 @@
+{
+  "definitions": {
+    "User": {
+      "type": "object",
+      "description": "A user object with all supported field types, constraints, and formats.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "required": true,
+          "nullable": false,
+          "description": "Primary key UUID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "required": true,
+          "nullable": false,
+          "description": "User email address."
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "nullable": true,
+          "default": "Anonymous",
+          "description": "User display name (nullable)."
+        },
+        "age": {
+          "type": "number",
+          "required": false,
+          "nullable": false,
+          "default": 18,
+          "minimum": 0,
+          "maximum": 150,
+          "description": "User's age (0-150)."
+        },
+        "isActive": {
+          "type": "boolean",
+          "required": true,
+          "nullable": false,
+          "description": "Whether the user account is active."
+        },
+        "signupDate": {
+          "type": "timestamp",
+          "required": true,
+          "nullable": false,
+          "description": "Account creation date-time."
+        },
+        "tags": {
+          "type": "array",
+          "required": false,
+          "nullable": false,
+          "items": {
+            "type": "string"
+          },
+          "description": "List of user tags."
+        },
+        "preferences": {
+          "type": "object",
+          "required": false,
+          "nullable": true,
+          "description": "User preference key/value store.",
+          "properties": {
+            "theme": {
+              "type": "string",
+              "required": false,
+              "default": "light",
+              "nullable": false
+            },
+            "notifications": {
+              "type": "boolean",
+              "required": false,
+              "default": true,
+              "nullable": false
+            }
+          }
+        }
+      }
+    },
+
+    "Product": {
+      "type": "object",
+      "description": "A product entity with arrays, numbers, defaults, and timestamps.",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "format": "uuid",
+          "required": true,
+          "nullable": false,
+          "description": "Product UUID."
+        },
+        "title": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "description": "Product title."
+        },
+        "price": {
+          "type": "number",
+          "required": true,
+          "nullable": false,
+          "minimum": 0,
+          "maximum": 999999,
+          "description": "Price in JPY."
+        },
+        "category": {
+          "type": "string",
+          "required": false,
+          "nullable": true,
+          "default": "general",
+          "description": "Optional category field."
+        },
+        "stock": {
+          "type": "number",
+          "required": false,
+          "nullable": false,
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Stock count."
+        },
+        "tags": {
+          "type": "array",
+          "required": false,
+          "nullable": true,
+          "items": {
+            "type": "string"
+          },
+          "description": "Tags for filtering."
+        },
+        "releasedAt": {
+          "type": "date",
+          "required": false,
+          "nullable": true,
+          "description": "Release date."
+        },
+        "attributes": {
+          "type": "object",
+          "required": false,
+          "nullable": false,
+          "description": "Custom product attributes.",
+          "properties": {
+            "color": {
+              "type": "string",
+              "required": false,
+              "nullable": true
+            },
+            "weight": {
+              "type": "number",
+              "required": false,
+              "nullable": false,
+              "minimum": 0,
+              "maximum": 2000
+            }
+          }
+        }
+      }
+    }
+  }
+}
