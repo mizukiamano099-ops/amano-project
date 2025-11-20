@@ -5,3 +5,9 @@
     "test:golden": "npm run golden:generate && npm run golden:test"
   }
 }
+
+{
+  "scripts": {
+    "golden:update": "cp -r tests/golden/output/* tests/golden/snapshots/"
+  }
+}
