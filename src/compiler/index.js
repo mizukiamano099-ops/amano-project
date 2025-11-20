@@ -1,45 +1,48 @@
-// index.js
-//
+// -----------------------------------------------------------------------------
+// index.js (ESM)
 // コンパイラのエントリポイント。
-// compile(sourceCode, emitterType) を公開し、
 // lexer → parser → canonicalizer → validator → emitter
-// のフルパイプラインを実行する。
+// -----------------------------------------------------------------------------
 
-const { tokenize } = require("./lexer");
-const { parse } = require("./parser");
-const { canonicalize } = require("./canonicalizer");
-const { validateIR } = require("./validator");
-const fs = require("fs");
-const path = require("path");
+import tokenize from "./lexer.js";
+import parse from "./parser.js";
+import canonicalize from "./canonicalizer.js";
+import validateIR from "./validator.js";
 
-// -----------------------------------------------------
-// import 解決用プリプロセッサ
-// -----------------------------------------------------
-function resolveImports(filePath, visited = new Set()) {
+// Emitter
+import { ZodEmitter } from "../emitters/zod/zod-emitter.js";
+
+// 今後増えるエミッタをここに登録する
+const EMITTERS = {
+  zod: ZodEmitter,
+};
+
+// -----------------------------------------------------------------------------
+// import 解決（DSL ファイル用）
+// -----------------------------------------------------------------------------
+import fs from "fs";
+import path from "path";
+
+export function resolveImports(filePath, visited = new Set()) {
   const abs = path.resolve(filePath);
+
   if (visited.has(abs)) {
-    throw new Error("循環 import が検出されました: " + abs);
+    throw new Error(`循環 import が検出されました: ${abs}`);
   }
   visited.add(abs);
 
   const dir = path.dirname(abs);
   const text = fs.readFileSync(abs, "utf8");
   const lines = text.split(/\r?\n/);
-  const out = [];
+
+  let out = [];
 
   for (const line of lines) {
-    const m = line.match(/^\s*@import\s+["'](.+?)["']/);
+    const m = line.match(/^\s*@import\s+"(.+?)"\s*;/);
     if (m) {
-      const target = m[1];
-      const targetPath = path.isAbsolute(target)
-        ? target
-        : path.join(dir, target);
-
-      if (!fs.existsSync(targetPath)) {
-        throw new Error(`import 先が存在しません: ${targetPath}`);
-      }
-
-      out.push(resolveImports(targetPath, visited));
+      const importPath = path.resolve(dir, m[1]);
+      const imported = resolveImports(importPath, visited);
+      out.push(imported);
     } else {
       out.push(line);
     }
@@ -48,54 +51,47 @@ function resolveImports(filePath, visited = new Set()) {
   return out.join("\n");
 }
 
-// -----------------------------------------------------
-// メインコンパイル関数
-// -----------------------------------------------------
-async function compile(sourceCode, emitterType = null) {
-  // lexer: tokenize
-  const tokens = tokenize(sourceCode);
-
-  // parser: AST生成
-  const ast = parse(sourceCode);
-
-  // canonicalizer: AST → IR
-  const ir = canonicalize(ast);
-
-  // validator: IR検証
-  const validation = validateIR(ir);
-  if (!validation.valid) {
-    throw new Error(
-      "IR 検証エラー:\n" + validation.errors.map(e => " - " + e).join("\n")
-    );
+// -----------------------------------------------------------------------------
+// compileIR（Golden Test/CLI用）
+// ir: JSON IR
+// emitterType: "zod" など
+// -----------------------------------------------------------------------------
+export async function compileIR(ir, emitterType = "zod") {
+  if (!EMITTERS[emitterType]) {
+    throw new Error(`Emitter '${emitterType}' が存在しません。`);
   }
 
-  // emitter: 必要ならコード生成
-  if (emitterType) {
-    const emitterPath = path.resolve(
-      __dirname,
-      "..",
-      "emitters",
-      emitterType,
-      `${emitterType}-emitter.js`
-    );
+  // 1️⃣ IR 検証
+  validateIR(ir);
 
-    if (!fs.existsSync(emitterPath)) {
-      throw new Error("指定されたエミッタが存在しません: " + emitterPath);
-    }
+  // 2️⃣ Emitter 生成
+  const emitter = new EMITTERS[emitterType]();
 
-    const emitter = require(emitterPath);
-    if (typeof emitter.emit !== "function") {
-      throw new Error("emitter は emit(ir) を export する必要があります");
-    }
+  // 3️⃣ コード生成
+  const result = emitter.emit(ir);
 
-    const generated = await emitter.emit(ir);
-    return { ir, generated };
-  }
-
-  return { ir };
+  return result;
 }
 
-module.exports = {
-  compile,
-  resolveImports
-};
+// -----------------------------------------------------------------------------
+// compile(sourceFile, emitterType)
+// DSL ファイルを読み込んで実行する CLI 用
+// -----------------------------------------------------------------------------
+export async function compile(sourceFile, emitterType = "zod") {
+  const source = resolveImports(sourceFile);
+
+  // 1. 字句解析
+  const tokens = tokenize(source);
+
+  // 2. パース → AST
+  const ast = parse(tokens);
+
+  // 3. AST → IR
+  const ir = canonicalize(ast);
+
+  // 4. IR 検証
+  validateIR(ir);
+
+  // 5. 出力
+  return compileIR(ir, emitterType);
+}
